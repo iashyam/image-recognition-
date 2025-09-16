@@ -40,6 +40,7 @@ class NoSEBN(nn.Module):
     def __init__(self, in_channels: int, out_channels: int, expension_factor: int, stride=1, isSE: bool= True):
         super().__init__()
 
+        self.res = in_channels == out_channels and stride == 1
         expension_factor = expension_factor
         exp_channels = expension_factor*in_channels
         self.conv2 = Conv2dNormActivation(in_channels=exp_channels, out_channels=exp_channels, kernel_size=3,stride=stride, groups=exp_channels)
@@ -51,13 +52,16 @@ class NoSEBN(nn.Module):
         x = self.conv2(x)
         x = self.conv3(x)
         x = self.bn(x)
-        # x += res
+        return x + res if self.res else x
+        x += res
 
         return x
 
 class ResedualBottleNeck(nn.Module):
     def __init__(self, in_channels: int, out_channels: int, expension_factor: int, stride=1, isSE: bool= True):
         super().__init__()
+
+        self.res = in_channels == out_channels and stride == 1
 
         expension_factor = expension_factor
         exp_channels = expension_factor*in_channels
@@ -72,7 +76,7 @@ class ResedualBottleNeck(nn.Module):
         x = self.conv2(x)
         x = self.conv3(x)
         x = self.bn(x)
-        # x += res
+        return x + res if self.res else x
 
         return x
 

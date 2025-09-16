@@ -2,7 +2,7 @@ from PIL import Image
 import numpy as np
 import torch
 
-def preprocess_image(img, target_sizt=224):
+def preprocess_image(img, target_size=224):
     
     # Resize so the shorter side is 256 (standard for B0)
     scale = 256.0 / min(img.size)
@@ -27,6 +27,6 @@ def preprocess_image(img, target_sizt=224):
     img_np = np.transpose(img_np, (2, 0, 1))
     
     # Convert to tensor
-    img_tensor = torch.tensor(img_np).unsqueeze(0)  # Add batch dimension
-    return img_tensor
+    img_tensor = torch.tensor(img_np).unsqueeze(0)
+    return img_tensor.float()
 
