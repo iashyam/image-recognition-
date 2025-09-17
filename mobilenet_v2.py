@@ -103,13 +103,14 @@ class Classifier(nn.Module):
         )
 
     def forward(self, x):
-        x = nn.functional.adaptive_avg_pool2d(x, (1, 1))
+        # x = nn.functional.adaptive_avg_pool2d(x, (1, 1))
+        x = nn.AdaptiveAvgPool2d((1, 1))(x)
         x = torch.flatten(x, 1)
         x = self.layer(x)
         return x
 
 #mobile net 
-class MobileNetV2(torch.nn.Module):
+class BurrahModel(torch.nn.Module):
     def __init__(self):
         super().__init__()
         
@@ -122,7 +123,7 @@ class MobileNetV2(torch.nn.Module):
         BottleNeckBigBlock(in_channels=96, out_channels=160,expension_factor=6, number=3),
         BottleNeckBigBlock(in_channels=160, out_channels=320,expension_factor=6, number=3),
         Conv2dNormActivation(in_channels=320, out_channels=1280, kernel_size=1, stride=(1,1)))
-        self.classifier = Classifier(1280, 1000, 0.25)
+        self.classifier = Classifier(1280, 1000, 0.24)
 
     def forward(self, image: torch.Tensor):
         x = image
@@ -139,29 +140,29 @@ if __name__=='__main__':
     def load_state_dict(model, path: str):
         my_model = model.state_dict()
         their_model = torch.load(path)
-        # print("our\n----")
-        # print(MobileNetV2())
-        # print("thier\n----")
-        # print(mobilenet_v2())
 
+        new_dict = {}
+        for (my_key, my_value), (their_key, their_value) in zip(my_model.items(), their_model.items()):
+            if my_value.shape == their_value.shape:
+                new_dict[my_key] = their_value
+            else:
+                print(f"Skipping {my_key}: {my_value.shape} vs {their_value.shape}")
+        model.load_state_dict(new_dict, strict=False)
+        return model
 
-        for my, their in zip(my_model.items(), their_model.items()):
-            my_key, my_value = my
-            their_key, their_value = their
-            my_value = their_value
-            
     from PIL import Image
     from utils import preprocess_image
     import matplotlib.pyplot as plt
-    model = MobileNetV2()
+    model = BurrahModel()
     
-    load_state_dict(model, path="mobilenet_v2-b0353104.pth") 
+    model = load_state_dict(model, path="mobilenet_v2-b0353104.pth") 
+    # model.load_state_dict(new_dict)
     model.eval()
     
     image = Image.open('hen.jpeg')
+    # image = Image.open('dog.jpg')
     image = preprocess_image(image).float()
-    print(f"{image.dtype=}")
-    output = model(image)
+    output = torch.softmax(model(image), dim=1)
     print(output.shape)
     label = torch.argmax(output)
     print(label,output[0][label] )
