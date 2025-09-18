@@ -1,7 +1,6 @@
 import torch 
 from torch import nn
 
-
 class ConvNormAct(nn.Module):
     def __init__(self, **args):
         super().__init__()
@@ -38,9 +37,9 @@ class DepthWiseConv(nn.Module):
         return self.conv(x)
 
 
-## Without (No) Squeeze Extraction (SE) BottleNeck (BN)
-class NoSEBN(nn.Module):
-    def __init__(self, in_channels: int, out_channels: int, expension_factor: int, stride=1, isSE: bool= True):
+## Without (No) Expenad-Squeeze (ES) BottleNeck (BN)
+class NoESBN(nn.Module):
+    def __init__(self, in_channels: int, out_channels: int, expension_factor: int, stride=1, isES: bool= True):
         super().__init__()
 
         self.res = in_channels == out_channels and stride == 1
@@ -59,17 +58,17 @@ class NoSEBN(nn.Module):
 
 
 class ResedualBottleNeck(nn.Module):
-    def __init__(self, in_channels: int, out_channels: int, expension_factor: int, stride=1, isSE: bool= True):
+    def __init__(self, in_channels: int, out_channels: int, expension_factor: int, stride=1, isES: bool= True):
         super().__init__()
-
+		
         self.res = in_channels == out_channels and stride == 1
 
-        expension_factor = expension_factor if isSE else 1
+        expension_factor = expension_factor if isES else 1
         exp_channels = expension_factor*in_channels
 
         l = []
 
-        if isSE: l.append(ConvNormAct(in_channels=in_channels, out_channels=exp_channels, kernel_size=1, stride=1))
+        if isES: l.append(ConvNormAct(in_channels=in_channels, out_channels=exp_channels, kernel_size=1, stride=1))
         l.append(ConvNormAct(in_channels=exp_channels, out_channels=exp_channels, kernel_size=3,stride=stride, groups=exp_channels))
         l.append(nn.Conv2d(in_channels=exp_channels, out_channels=out_channels, kernel_size=1, stride=1, bias=False))
         l.append(nn.BatchNorm2d(out_channels, eps=1e-5, momentum=0.1, affine=True, track_running_stats=True))
@@ -116,15 +115,15 @@ class BurrahMobileNet(torch.nn.Module):
         self.layers = []
         
         self.normact = ConvNormAct(in_channels=3, out_channels=32, kernel_size=3, stride=(2,2))
-        # self.NOSEBlock = NoSEBN(32, 16, 1) 
+        # self.NOESBlock = NoESBN(32, 16, 1) 
 
         in_channels = 32
         for t, c, n, s in self.bottlenek_config:
-            isSE = False if t==1 else True
+            isES = False if t==1 else True
             for i in range(n):
                 stride = s if i==0 else 1
                 self.layers.append(
-                    ResedualBottleNeck(in_channels=in_channels, out_channels=c, expension_factor=t, stride=stride, isSE = isSE)
+                    ResedualBottleNeck(in_channels=in_channels, out_channels=c, expension_factor=t, stride=stride, isES = isES)
                 ) 
                 in_channels = c
 
