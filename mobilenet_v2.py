@@ -36,6 +36,7 @@ class DepthWiseConv(nn.Module):
     def forward(self, x):
         return self.conv(x)
 
+## Without (No) Squeeze Extraction (SE) BottleNeck (BN)
 class NoSEBN(nn.Module):
     def __init__(self, in_channels: int, out_channels: int, expension_factor: int, stride=1, isSE: bool= True):
         super().__init__()
@@ -81,12 +82,12 @@ class ResedualBottleNeck(nn.Module):
         return x
 
 class BottleNeckBigBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, expension_factor, number):
+    def __init__(self, in_channels, out_channels, expension_factor,stride, number):
         super().__init__()
-        self.l = [ResedualBottleNeck(in_channels, in_channels, expension_factor, stride=2)]
+        self.l = [ResedualBottleNeck(in_channels, in_channels, expension_factor, stride=stride)]
         for i in range(number-2):
-            self.l.append(ResedualBottleNeck(in_channels, in_channels, expension_factor))
-        self.l.append(ResedualBottleNeck(in_channels, out_channels, expension_factor))
+            self.l.append(ResedualBottleNeck(in_channels, in_channels, expension_factor, stride=1))
+        self.l.append(ResedualBottleNeck(in_channels, out_channels, expension_factor, stride=1))
         self.block = nn.Sequential(*self.l)
 
     def forward(self, x):
@@ -116,12 +117,12 @@ class BurrahModel(torch.nn.Module):
         
         self.normact = Conv2dNormActivation(in_channels=3, out_channels=32, kernel_size=3, stride=(2,2))
         self.NOSEBlock = NoSEBN(32, 16, 1) 
-        self.BottleneckBlocks =  nn.Sequential(ResedualBottleNeck(in_channels=16, out_channels=24,expension_factor=6, stride=1),
-        BottleNeckBigBlock(in_channels=24, out_channels=32,expension_factor=6, number=2),
-        BottleNeckBigBlock(in_channels=32, out_channels=64,expension_factor=6, number=3),
-        BottleNeckBigBlock(in_channels=64, out_channels=96,expension_factor=6, number=4),
-        BottleNeckBigBlock(in_channels=96, out_channels=160,expension_factor=6, number=3),
-        BottleNeckBigBlock(in_channels=160, out_channels=320,expension_factor=6, number=3),
+        self.BottleneckBlocks =  nn.Sequential(ResedualBottleNeck(in_channels=16, out_channels=24,expension_factor=6, stride=2),
+        BottleNeckBigBlock(in_channels=24, out_channels=32,expension_factor=6,stride=2, number=2),
+        BottleNeckBigBlock(in_channels=32, out_channels=64,expension_factor=6,stride=2, number=3),
+        BottleNeckBigBlock(in_channels=64, out_channels=96,expension_factor=6,stride=2, number=4),
+        BottleNeckBigBlock(in_channels=96, out_channels=160,expension_factor=6,stride=1, number=3),
+        BottleNeckBigBlock(in_channels=160, out_channels=320,expension_factor=6,stride=2, number=3),
         Conv2dNormActivation(in_channels=320, out_channels=1280, kernel_size=1, stride=(1,1)))
         self.classifier = Classifier(1280, 1000, 0.24)
 
@@ -161,7 +162,7 @@ if __name__=='__main__':
     
     image = Image.open('hen.jpeg')
     # image = Image.open('dog.jpg')
-    image = preprocess_image(image).float()
+    image = preprocess_image(image).float()*0
     output = torch.softmax(model(image), dim=1)
     print(output.shape)
     label = torch.argmax(output)
