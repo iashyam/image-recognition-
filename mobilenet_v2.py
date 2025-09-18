@@ -2,7 +2,7 @@ import torch
 from torch import nn
 
 
-class Conv2dNormActivation(nn.Module):
+class ConvNormAct(nn.Module):
     def __init__(self, **args):
         super().__init__()
         
@@ -27,6 +27,7 @@ class Conv2dNormActivation(nn.Module):
 
         return x
 
+
 class DepthWiseConv(nn.Module):
     def __init__(self,in_channels: int, out_channels: int,  kernel_size: int = 3, stride=1):
         super().__init__()
@@ -36,6 +37,7 @@ class DepthWiseConv(nn.Module):
     def forward(self, x):
         return self.conv(x)
 
+
 ## Without (No) Squeeze Extraction (SE) BottleNeck (BN)
 class NoSEBN(nn.Module):
     def __init__(self, in_channels: int, out_channels: int, expension_factor: int, stride=1, isSE: bool= True):
@@ -44,7 +46,7 @@ class NoSEBN(nn.Module):
         self.res = in_channels == out_channels and stride == 1
         expension_factor = expension_factor
         exp_channels = expension_factor*in_channels
-        self.conv2 = Conv2dNormActivation(in_channels=exp_channels, out_channels=exp_channels, kernel_size=3,stride=stride, groups=exp_channels)
+        self.conv2 = ConvNormAct(in_channels=exp_channels, out_channels=exp_channels, kernel_size=3,stride=stride, groups=exp_channels)
         self.conv3 = nn.Conv2d(in_channels=exp_channels, out_channels=out_channels, kernel_size=1, stride=1, bias=False)
         self.bn = nn.BatchNorm2d(out_channels, eps=1e-5, momentum=0.1, affine=True, track_running_stats=True)
 
@@ -54,9 +56,7 @@ class NoSEBN(nn.Module):
         x = self.conv3(x)
         x = self.bn(x)
         return x + res if self.res else x
-        x += res
 
-        return x
 
 class ResedualBottleNeck(nn.Module):
     def __init__(self, in_channels: int, out_channels: int, expension_factor: int, stride=1, isSE: bool= True):
@@ -64,34 +64,22 @@ class ResedualBottleNeck(nn.Module):
 
         self.res = in_channels == out_channels and stride == 1
 
-        expension_factor = expension_factor
+        expension_factor = expension_factor if isSE else 1
         exp_channels = expension_factor*in_channels
-        self.conv1 = Conv2dNormActivation(in_channels=in_channels, out_channels=exp_channels, kernel_size=1, stride=1)
-        self.conv2 = Conv2dNormActivation(in_channels=exp_channels, out_channels=exp_channels, kernel_size=3,stride=stride, groups=exp_channels)
-        self.conv3 = nn.Conv2d(in_channels=exp_channels, out_channels=out_channels, kernel_size=1, stride=1, bias=False)
-        self.bn = nn.BatchNorm2d(out_channels, eps=1e-5, momentum=0.1, affine=True, track_running_stats=True)
+
+        l = []
+
+        if isSE: l.append(ConvNormAct(in_channels=in_channels, out_channels=exp_channels, kernel_size=1, stride=1))
+        l.append(ConvNormAct(in_channels=exp_channels, out_channels=exp_channels, kernel_size=3,stride=stride, groups=exp_channels))
+        l.append(nn.Conv2d(in_channels=exp_channels, out_channels=out_channels, kernel_size=1, stride=1, bias=False))
+        l.append(nn.BatchNorm2d(out_channels, eps=1e-5, momentum=0.1, affine=True, track_running_stats=True))
+
+        self.RBNBlock = nn.Sequential(*l)
 
     def forward(self, x):
         res = x
-        x = self.conv1(x)
-        x = self.conv2(x)
-        x = self.conv3(x)
-        x = self.bn(x)
+        x = self.RBNBlock(x)
         return x + res if self.res else x
-
-        return x
-
-class BottleNeckBigBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, expension_factor,stride, number):
-        super().__init__()
-        self.l = [ResedualBottleNeck(in_channels, in_channels, expension_factor, stride=stride)]
-        for i in range(number-2):
-            self.l.append(ResedualBottleNeck(in_channels, in_channels, expension_factor, stride=1))
-        self.l.append(ResedualBottleNeck(in_channels, out_channels, expension_factor, stride=1))
-        self.block = nn.Sequential(*self.l)
-
-    def forward(self, x):
-        return self.block(x)
 
 
 class Classifier(nn.Module):
@@ -114,58 +102,69 @@ class Classifier(nn.Module):
 class BurrahModel(torch.nn.Module):
     def __init__(self):
         super().__init__()
+
+
+        self.bottlenek_config=[# t, c,   n, s
+                                [1, 16,  1, 1],
+                                [6, 24,  2, 2],
+                                [6, 32,  3, 2],
+                                [6, 64,  4, 2],
+                                [6, 96,  3, 1],
+                                [6, 160, 3, 2],
+                                [6, 320, 1, 1],]
         
-        self.normact = Conv2dNormActivation(in_channels=3, out_channels=32, kernel_size=3, stride=(2,2))
-        self.NOSEBlock = NoSEBN(32, 16, 1) 
-        self.BottleneckBlocks =  nn.Sequential(ResedualBottleNeck(in_channels=16, out_channels=24,expension_factor=6, stride=2),
-        BottleNeckBigBlock(in_channels=24, out_channels=32,expension_factor=6,stride=2, number=2),
-        BottleNeckBigBlock(in_channels=32, out_channels=64,expension_factor=6,stride=2, number=3),
-        BottleNeckBigBlock(in_channels=64, out_channels=96,expension_factor=6,stride=2, number=4),
-        BottleNeckBigBlock(in_channels=96, out_channels=160,expension_factor=6,stride=1, number=3),
-        BottleNeckBigBlock(in_channels=160, out_channels=320,expension_factor=6,stride=2, number=3),
-        Conv2dNormActivation(in_channels=320, out_channels=1280, kernel_size=1, stride=(1,1)))
+        self.layers = []
+        
+        self.normact = ConvNormAct(in_channels=3, out_channels=32, kernel_size=3, stride=(2,2))
+        # self.NOSEBlock = NoSEBN(32, 16, 1) 
+
+        in_channels = 32
+        for t, c, n, s in self.bottlenek_config:
+            isSE = False if t==1 else True
+            for i in range(n):
+                stride = s if i==0 else 1
+                self.layers.append(
+                    ResedualBottleNeck(in_channels=in_channels, out_channels=c, expension_factor=t, stride=stride, isSE = isSE)
+                ) 
+                in_channels = c
+
+        self.layers.append(ConvNormAct(in_channels=320, out_channels=1280, kernel_size=1, stride=(1,1)))
+        self.BottleNeckBlocks = nn.Sequential(*self.layers)
         self.classifier = Classifier(1280, 1000, 0.24)
 
     def forward(self, image: torch.Tensor):
         x = image
         x = self.normact(x)
-        x = self.NOSEBlock(x)
-        x = self.BottleneckBlocks(x)
+        x = self.BottleNeckBlocks(x)
         x = self.classifier(x)
 
         return x
 
+    def load_state_dict(self, state_dict, strict = True, assign = False):
+        state_dict = dict(zip(self.state_dict().keys(), state_dict.values()))
+        return super().load_state_dict(state_dict, strict, assign)
+
 
 if __name__=='__main__':
 
-    def load_state_dict(model, path: str):
-        my_model = model.state_dict()
-        their_model = torch.load(path)
-
-        new_dict = {}
-        for (my_key, my_value), (their_key, their_value) in zip(my_model.items(), their_model.items()):
-            if my_value.shape == their_value.shape:
-                new_dict[my_key] = their_value
-            else:
-                print(f"Skipping {my_key}: {my_value.shape} vs {their_value.shape}")
-        model.load_state_dict(new_dict, strict=False)
-        return model
 
     from PIL import Image
     from utils import preprocess_image
+    from labels import labels
     import matplotlib.pyplot as plt
     model = BurrahModel()
     
-    model = load_state_dict(model, path="mobilenet_v2-b0353104.pth") 
+    model.load_state_dict(torch.load("mobilenet_v2-b0353104.pth"))
     # model.load_state_dict(new_dict)
     model.eval()
     
     image = Image.open('hen.jpeg')
     # image = Image.open('dog.jpg')
-    image = preprocess_image(image).float()*0
+    image = preprocess_image(image).float()
     output = torch.softmax(model(image), dim=1)
     print(output.shape)
-    label = torch.argmax(output)
-    print(label,output[0][label] )
+    label = torch.argmax(output).item()
+    label = labels[label]
+    print(label)
     print(image.shape)
     
