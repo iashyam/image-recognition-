@@ -4,4 +4,14 @@ I have veen experimenting with Vision Models for quite a while now. I am trying 
 
 - MobileNet V2: Paper [MobileNetV2: Inverted Residuals and Linear Bottlenecks](https://arxiv.org/pdf/1801.04381)
 
+TODO:
+
+    - [ ] Containerize the model with Docker. 
+    - [ ] Put automated testing with github actions. 
+    - [ ] Deploy the model to server. 
+
+Contributions
+
+This is a personal project and I am not recieving any contributions as per now. 
+
 I am on to efficient net next. 
