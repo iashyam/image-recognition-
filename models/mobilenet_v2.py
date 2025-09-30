@@ -157,8 +157,8 @@ if __name__=='__main__':
     # model.load_state_dict(new_dict)
     model.eval()
     
-    image = Image.open('hen.jpeg')
-    # image = Image.open('dog.jpg')
+    image = Image.open('sample_images/hen.jpeg')
+    # image = Image.open('sample_images/dog.jpg')
     image = preprocess_image(image).float()
     output = torch.softmax(model(image), dim=1)
     print(output.shape)
