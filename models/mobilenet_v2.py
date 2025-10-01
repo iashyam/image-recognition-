@@ -149,21 +149,22 @@ if __name__=='__main__':
 
     from PIL import Image
     from utils import preprocess_image
-    from labels import labels
+    from utils import labels
     import matplotlib.pyplot as plt
-    model = BurrahModel()
+    model = BurrahMobileNet()
     
-    model.load_state_dict(torch.load("mobilenet_v2-b0353104.pth"))
+    model.load_state_dict(torch.load("weights/mobilenet_v2-b0353104.pth"))
     # model.load_state_dict(new_dict)
     model.eval()
     
-    image = Image.open('sample_images/hen.jpeg')
-    # image = Image.open('sample_images/dog.jpg')
-    image = preprocess_image(image).float()
+    image_wp = Image.open('sample_images/hen.jpeg')
+    image_wp = Image.open('sample_images/dog.jpg')
+    image = preprocess_image(image_wp).float()
     output = torch.softmax(model(image), dim=1)
-    print(output.shape)
     label = torch.argmax(output).item()
     label = labels[label]
-    print(label)
-    print(image.shape)
-    
+    print(f"Predicted {label} with {torch.max(output)*100:1f}% probablity.") 
+    plt.imshow(image_wp)
+    plt.title(f"Predicted {label}")
+    plt.axis("off")
+    plt.show()
